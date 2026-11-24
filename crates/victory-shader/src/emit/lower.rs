@@ -929,7 +929,15 @@ impl<'a> Lower<'a> {
         let (kind, col) = match input {
             Input::VertexId => (1, 0),
             Input::InstanceId => (2, 0),
-            Input::PrimitiveId => (10, 0),
+            // Only a pixel shader may take `SV_PrimitiveID`. The console's
+            // vertex stage reads it in v2, but a vertex-shader input
+            // signature that names it is invalid on the host: D3D12 refuses
+            // the whole pipeline with 0x80070057, which drops every draw
+            // that uses it (the menus' UI among them). Leave those reads
+            // missing instead, as before: they only fail if the value is
+            // actually consumed.
+            Input::PrimitiveId if self.s.pixel => (10, 0),
+            Input::PrimitiveId => return Val::Missing("the primitive id"),
             Input::Position(c) => (3, c),
             Input::Attribute { row, channel } => {
                 return match self.find_input(row, channel) {
