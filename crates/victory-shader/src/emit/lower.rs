@@ -929,6 +929,7 @@ impl<'a> Lower<'a> {
         let (kind, col) = match input {
             Input::VertexId => (1, 0),
             Input::InstanceId => (2, 0),
+            Input::PrimitiveId => (10, 0),
             Input::Position(c) => (3, c),
             Input::Attribute { row, channel } => {
                 return match self.find_input(row, channel) {
@@ -937,7 +938,6 @@ impl<'a> Lower<'a> {
                 };
             }
             Input::Barycentric { .. } => return Val::Missing("barycentrics read directly"),
-            Input::PrimitiveId => return Val::Missing("the primitive id"),
             // The console code tests it against 0 (`v_cmp_ne_u32`), as the
             // host's value can be.
             Input::FrontFace => (13, 0),
@@ -977,9 +977,11 @@ impl<'a> Lower<'a> {
                 }
                 id
             }
-            None if kind >= 3 => return Val::Missing("a pixel system input the signature lacks"),
+            None if kind >= 3 && kind != 10 => {
+                return Val::Missing("a pixel system input the signature lacks")
+            }
             None => {
-                // The console signature leaves out vertex and instance ids; PC
+                // The console signature leaves out vertex, instance and primitive ids; PC
                 // gives them a row after the others.
                 let row = self
                     .s
@@ -989,8 +991,14 @@ impl<'a> Lower<'a> {
                     .map(|r| r + 1)
                     .max()
                     .unwrap_or(0);
+                let name = match kind {
+                    1 => "SV_VertexID",
+                    2 => "SV_InstanceID",
+                    10 => "SV_PrimitiveID",
+                    _ => "",
+                };
                 self.s.inputs.push(SigElement {
-                    name: ["", "SV_VertexID", "SV_InstanceID"][kind as usize].into(),
+                    name: name.into(),
                     index: 0,
                     kind,
                     comp: 5,
